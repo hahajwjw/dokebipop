@@ -3,343 +3,212 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Runner Game</title>
-
+<title>두더지 잡기</title>
 <style>
-body { margin:0; overflow:hidden; background:#eee; }
+body { margin:0; background:#eee; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; }
+
+#hud { width:100%; max-width:420px; display:flex; justify-content:space-between; padding:10px; font-weight:bold; }
 
 #game {
-  width:100vw;
-  height:100vh;
-  position:relative;
-  background:#ddd;
+  width:100%;
+  max-width:420px;
+  aspect-ratio:3/4;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  grid-template-rows:repeat(4,1fr);
+  gap:5px;
 }
 
-/* 중앙 레벨 표시 */
+.hole { position:relative; background:url('hole.png') center/cover no-repeat; }
+.character { position:absolute; width:100%; height:100%; top:0; left:0; }
+
+.pop { 
+  position:absolute; 
+  width:25%; 
+  height:25%; 
+  top:50%; 
+  left:50%; 
+  transform:translate(-50%, -50%); 
+}
+
 #levelText {
   position:absolute;
-  top:40%;
-  left:50%;
-  transform:translate(-50%,-50%);
-  font-size:60px;
+  top:40%; left:50%;
+  transform:translate(-50%, -50%);
+  font-size:40px;
   font-weight:bold;
-  opacity:0;
-  pointer-events:none;
-}
-
-/* ⭐ 엔딩 (밖으로 이동 + fixed) */
-#ending {
-  position:fixed;
-  top:0;
-  left:0;
-  width:100%;
-  height:100%;
-  background:white;
-
   display:none;
-  justify-content:center;
-  align-items:center;
-  flex-direction:column;
-
-  z-index:9999;
+  text-align:center;
+  color: gray;
 }
 
-#ending img {
-  width:150px;
-}
-
-.showLevel {
-  animation: showLevel 1s;
-}
-
-@keyframes showLevel {
-  0% { opacity:0; transform:translate(-50%,-60%); }
-  30% { opacity:1; }
-  100% { opacity:0; transform:translate(-50%,-40%); }
-}
-
-/* 효과 */
-.flash { animation: flash 0.2s; }
-.shake { animation: shake 0.3s; }
-
-@keyframes flash {
-  0% { background:white; }
-  100% { background:transparent; }
-}
-
-@keyframes shake {
-  0% { transform: translate(0,0); }
-  25% { transform: translate(-5px,0); }
-  50% { transform: translate(5px,0); }
-  75% { transform: translate(-5px,0); }
-  100% { transform: translate(0,0); }
-}
-
-.player {
-  width:60px;
-  height:60px;
-  position:absolute;
-  bottom:100px;
-  left:50%;
-  transform:translateX(-50%);
-  transition: left 0.2s ease;
-}
-
-.player img {
-  width:100%;
-  height:100%;
-}
-
-.item, .trap {
-  width:50px;
-  height:50px;
-  position:absolute;
-}
-
-.lane-line {
-  position:absolute;
-  top:0;
-  bottom:0;
-  width:0;
-  border-left:2px dashed rgba(0,0,0,0.2);
-}
-
-#ui {
-  position:absolute;
-  top:10px;
-  left:50%;
-  transform:translateX(-50%);
-  font-size:20px;
-  font-weight:bold;
-}
-
-/* 게임오버 */
-#gameOver {
-  position:absolute;
-  top:50%;
-  left:50%;
-  transform:translate(-50%,-50%);
+#endPopup {
+  position:fixed;
+  top:50%; left:50%;
+  transform:translate(-50%, -50%);
   background:white;
   padding:20px;
   border-radius:10px;
-  text-align:center;
   display:none;
+  text-align:center;
 }
 
-button {
-  margin-top:10px;
-  padding:10px 20px;
-  font-size:16px;
-}
+button { padding:10px 20px; font-size:16px; }
 </style>
 </head>
-
 <body>
 
-<div id="game">
-  <div id="ui">점수: 0 | 레벨: 1 | 시간: 8</div>
-  <div id="levelText">LEVEL 1</div>
-
-  <div class="lane-line" style="left:33.33%"></div>
-  <div class="lane-line" style="left:66.66%"></div>
-
-  <div id="player" class="player">
-    <img id="playerImg" src="gorby1.png">
-  </div>
-
-  <!-- 게임오버 -->
-  <div id="gameOver">
-    <div id="resultText"></div>
-    <button onclick="location.reload()">다시하기</button>
-  </div>
+<div id="hud">
+  <div id="level">Level: 1</div>
+  <div id="score">Score: 0</div>
 </div>
 
-<!-- ⭐ 엔딩을 밖으로 이동 -->
-<div id="ending">
-  <h1>🎉 축하합니다!</h1>
-  <img id="endingImg" src="gorby5.png">
+<div id="game"></div>
+<div id="levelText"></div>
+
+<div id="endPopup">
+  <div id="result"></div>
+  <button onclick="restartGame()">다시하기</button>
 </div>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
+const game = document.getElementById('game');
+const levelText = document.getElementById('levelText');
+const scoreText = document.getElementById('score');
+const levelTextTop = document.getElementById('level');
 
-const game = document.getElementById("game");
-const player = document.getElementById("player");
-const playerImg = document.getElementById("playerImg");
-const ui = document.getElementById("ui");
-const levelText = document.getElementById("levelText");
-const gameOverDiv = document.getElementById("gameOver");
-const resultText = document.getElementById("resultText");
-
-const ending = document.getElementById("ending");
-const endingImg = document.getElementById("endingImg");
-
-const lanes = [0.2, 0.5, 0.8];
-let currentLane = 1;
-
-let items = [];
 let score = 0;
-let totalScore = 0;
 let level = 1;
-let timeLeft = 8;
-let maxLevel = 1;
-let isGameOver = false;
-let isEnding = false;
+let spawnCount = 0;
+let rabbitCount = 0;
+let playing = false;
 
-// 걷기 애니메이션
-let walkToggle = true;
-setInterval(() => {
-  if (player.dataset.state === "move") return;
-  playerImg.src = walkToggle ? "gorby1.png" : "gorby2.png";
-  walkToggle = !walkToggle;
-}, 200);
+const holes = [];
 
-// 이동 이미지
-function setMoveImage(dir) {
-  player.dataset.state = "move";
-  playerImg.src = dir === "left" ? "gorby3.png" : "gorby4.png";
-  setTimeout(() => player.dataset.state = "", 200);
-}
+for(let i=0;i<12;i++){
+  const div = document.createElement('div');
+  div.className='hole';
+  game.appendChild(div);
+  holes.push(div);
 
-// 레벨 표시
-function showLevelText() {
-  levelText.innerText = "LEVEL " + level;
-  levelText.classList.add("showLevel");
-  setTimeout(() => levelText.classList.remove("showLevel"), 1000);
-}
-
-// ⭐ 엔딩
-function showEnding() {
-  isEnding = true;
-  ending.style.display = "flex";
-
-  let toggle = true;
-  setInterval(() => {
-    endingImg.src = toggle ? "gorby5.png" : "gorby6.png";
-    toggle = !toggle;
-  }, 300);
-}
-
-// 생성
-function spawn() {
-  if (isGameOver || isEnding) return;
-
-  const el = document.createElement("img");
-  const isItem = Math.random() > 0.6;
-
-  const type = isItem
-    ? [{img:"item1.png",score:10},{img:"item2.png",score:20},{img:"item3.png",score:30}][Math.floor(Math.random()*3)]
-    : [{img:"trap5.png",score:-50},{img:"trap10.png",score:-100}][Math.floor(Math.random()*2)];
-
-  el.src = type.img;
-  el.className = isItem ? "item" : "trap";
-
-  const lane = Math.floor(Math.random()*3);
-  el.style.left = (lanes[lane] * window.innerWidth) + "px";
-  el.style.transform = "translateX(-50%)";
-  el.style.top = "-60px";
-
-  game.appendChild(el);
-
-  items.push({ el, y:-60, score:type.score, type: isItem ? "item" : "trap" });
-}
-
-// 충돌
-function checkCollision(a, b) {
-  return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
-}
-
-// 게임 루프
-function gameLoop() {
-  if (isGameOver || isEnding) return;
-
-  const speed = 5 + level * 2;
-
-  items.forEach((obj, i) => {
-    obj.y += speed;
-    obj.el.style.top = obj.y + "px";
-
-    const r1 = player.getBoundingClientRect();
-    const r2 = obj.el.getBoundingClientRect();
-
-    if (checkCollision(r1, r2)) {
-      score += obj.score;
-      totalScore += obj.score;
-
-      if (score < 0) endGame();
-
-      obj.el.remove();
-      items.splice(i,1);
-    }
-
-    if (obj.y > window.innerHeight) {
-      obj.el.remove();
-      items.splice(i,1);
-    }
+  div.addEventListener('click', ()=>{
+    if(!playing) return;
+    showPop(div, false);
   });
-
-  ui.innerText = `점수: ${score} | 레벨: ${level} | 시간: ${timeLeft}`;
 }
 
-// 레벨 타이머
-setInterval(() => {
-  if (isGameOver || isEnding) return;
+function countdownStart(){
+  let count = 3;
+  levelText.style.display='block';
 
-  timeLeft--;
-
-  if (timeLeft <= 0) {
-    if (level === 10) {
-      showEnding();
+  function step(){
+    if(count === 3){
+      levelText.innerHTML = `Level.${level}<br>${count}`;
+    } else if(count > 0){
+      levelText.innerHTML = `${count}`;
+    } else {
+      levelText.style.display='none';
+      playing = true;
+      gameLoop();
       return;
     }
-
-    level++;
-    maxLevel = Math.max(maxLevel, level);
-    timeLeft = 8;
-    score = 0;
-    showLevelText();
+    count--;
+    setTimeout(step,1000);
   }
-}, 1000);
 
-// 종료
-function endGame() {
-  isGameOver = true;
-
-  resultText.innerHTML = `
-    게임오버<br><br>
-    최고 레벨: ${maxLevel}<br>
-    누적 점수: ${totalScore}
-  `;
-  gameOverDiv.style.display = "block";
+  step();
 }
 
-// 루프
-setInterval(spawn, 800);
-setInterval(gameLoop, 30);
+function showPop(hole, isHit){
+  const pop = document.createElement('img');
+  pop.src = isHit ? 'pop2.png' : 'pop1.png';
+  pop.className='pop';
+  hole.appendChild(pop);
+  setTimeout(()=> pop.remove(), 300);
+}
 
-// 입력
-document.addEventListener("keydown", e => {
-  if (isGameOver || isEnding) return;
+function spawn(){
+  if(!playing) return;
 
-  if (e.key === "ArrowLeft" && currentLane > 0) {
-    currentLane--;
-    setMoveImage("left");
-    player.style.left = (lanes[currentLane] * window.innerWidth) + "px";
+  if(spawnCount >= 20){
+    if(score < 100){ endGame(); return; }
+
+    level++;
+    spawnCount = 0;
+    rabbitCount = 0;
+    levelTextTop.innerText = `Level: ${level}`;
+    playing = false;
+    countdownStart();
+    return;
   }
-  if (e.key === "ArrowRight" && currentLane < 2) {
-    currentLane++;
-    setMoveImage("right");
-    player.style.left = (lanes[currentLane] * window.innerWidth) + "px";
-  }
-});
 
-// 시작
-player.style.left = (lanes[currentLane] * window.innerWidth) + "px";
-showLevelText();
+  const hole = holes[Math.floor(Math.random() * holes.length)];
+  if(hole.querySelector('.character')) return;
 
-});
+  let isRabbit = (rabbitCount < 3 && Math.random() < 0.2);
+  if(isRabbit) rabbitCount++;
+
+  const frames = isRabbit ? 5 : 6;
+  let i = 1;
+
+  const img = document.createElement('img');
+  img.className='character';
+  hole.appendChild(img);
+
+  // 1. 애니메이션 속도 수정: (80 - level*10) -> (400 - level*50)로 변경하여 약 5배 느리게 설정
+  const interval = setInterval(()=>{
+    img.src = `${isRabbit ? 'to' : 'do'}_${i}_a.png`;
+    i++;
+    if(i > frames){ clearInterval(interval); img.remove(); }
+  }, Math.max(100, (400 - level * 50))); 
+
+  img.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    if(!playing) return;
+
+    if(isRabbit){ score -= 20; }
+    else { score += 10; }
+
+    if(score < 0){ endGame(); return; }
+
+    showPop(hole, true);
+
+    let j = 1;
+    const hitInterval = setInterval(()=>{
+      img.src = `${isRabbit ? 'to' : 'do'}_${j}_b.png`;
+      j++;
+      if(j > frames){ clearInterval(hitInterval); img.remove(); }
+    }, 50);
+
+    scoreText.innerText = `Score: ${score}`;
+  });
+
+  spawnCount++;
+}
+
+function gameLoop(){
+  if(!playing) return;
+  spawn();
+  // 2. 생성 간격 수정: (1000 - level*100) -> (2000 - level*200)로 변경하여 등장 주기를 여유있게 설정
+  setTimeout(gameLoop, Math.max(500, (2000 - level * 200)));
+}
+
+function endGame(){
+  playing = false;
+  document.getElementById('result').innerText = `최고 레벨: ${level}\n총 점수: ${score}`;
+  document.getElementById('endPopup').style.display='block';
+}
+
+function restartGame(){
+  score = 0; level = 1; spawnCount = 0; rabbitCount = 0;
+  scoreText.innerText = 'Score: 0';
+  levelTextTop.innerText = 'Level: 1';
+  document.getElementById('endPopup').style.display='none';
+  countdownStart();
+}
+
+countdownStart();
 </script>
 
 </body>
 </html>
-
