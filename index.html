@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>두더지 잡기</title>
+<style>
+body { margin:0; background:#eee; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; }
+
+#hud { width:100%; max-width:420px; display:flex; justify-content:space-between; padding:10px; font-weight:bold; }
+
+#game {
+  width:100%;
+  max-width:420px;
+  aspect-ratio:3/4;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  grid-template-rows:repeat(4,1fr);
+  gap:5px;
+}
+
+.hole { position:relative; background:url('hole.png') center/cover no-repeat; }
+.character, .pop { position:absolute; width:100%; height:100%; top:0; left:0; }
+
+#levelText {
+  position:absolute;
+  top:40%; left:50%;
+  transform:translate(-50%, -50%);
+  font-size:40px;
+  font-weight:bold;
+  display:none;
+  text-align:center;
+  color: #888;
+}
+
+#endPopup {
+  position:fixed;
+  top:50%; left:50%;
+  transform:translate(-50%, -50%);
+  background:white;
+  padding:20px;
+  border-radius:10px;
+  display:none;
+  text-align:center;
+}
+
+button { padding:10px 20px; font-size:16px; }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div id="level">Level: 1</div>
+  <div id="score">Score: 0</div>
+</div>
+
+<div id="game"></div>
+<div id="levelText"></div>
+
+<div id="endPopup">
+  <div id="result"></div>
+  <button onclick="restartGame()">다시하기</button>
+</div>
+
+<script>
+const game = document.getElementById('game');
+const levelText = document.getElementById('levelText');
+const scoreText = document.getElementById('score');
+const levelTextTop = document.getElementById('level');
+
+let score = 0;
+let level = 1;
+let spawnCount = 0;
+let rabbitCount = 0;
+let playing = false;
+
+const holes = [];
+
+for(let i=0;i<12;i++){
+  const div = document.createElement('div');
+  div.className='hole';
+  game.appendChild(div);
+  holes.push(div);
+
+  div.addEventListener('click', ()=>{
+    if(!playing) return;
+    showPop(div,false);
+  });
+}
+
+function countdownStart(){
+  let count = 3;
+  levelText.style.display='block';
+
+  function step(){
+    if(count === 3){
+      levelText.innerHTML = `Level.${level}<br>${count}`;
+    } else if(count > 0){
+      levelText.innerHTML = `${count}`;
+    } else {
+      levelText.style.display='none';
+      playing = true;
+      gameLoop();
+      return;
+    }
+    count--;
+    setTimeout(step,1000);
+  }
+
+  step();
+}
+
+function showPop(hole,isHit){
+  const pop = document.createElement('img');
+  pop.src = isHit ? 'pop2.png':'pop1.png';
+  pop.className='pop';
+  hole.appendChild(pop);
+  setTimeout(()=> pop.remove(),300);
+}
+
+function spawn(){
+  if(!playing) return;
+
+  if(spawnCount>=20){
+    if(score < 100){ endGame(); return; }
+
+    level++;
+    spawnCount=0;
+    rabbitCount=0;
+    levelTextTop.innerText = `Level: ${level}`;
+    playing = false;
+    countdownStart();
+    return;
+  }
+
+  const hole = holes[Math.floor(Math.random()*holes.length)];
+  if(hole.querySelector('.character')) return;
+
+  let isRabbit = (rabbitCount<3 && Math.random()<0.2);
+  if(isRabbit) rabbitCount++;
+
+  const frames = isRabbit ? 5 : 6;
+  let i=1;
+
+  const img = document.createElement('img');
+  img.className='character';
+  hole.appendChild(img);
+
+  const interval = setInterval(()=>{
+    img.src = `${isRabbit?'to':'do'}_${i}_a.png`;
+    i++;
+    if(i>frames){ clearInterval(interval); img.remove(); }
+  }, Math.max(40, 80 - level*10));
+
+  img.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    if(!playing) return;
+
+    if(isRabbit){ score -= 20; }
+    else { score += 10; }
+
+    if(score < 0){ endGame(); return; }
+
+    showPop(hole,true);
+
+    let j=1;
+    const hitInterval = setInterval(()=>{
+      img.src = `${isRabbit?'to':'do'}_${j}_b.png`;
+      j++;
+      if(j>frames){ clearInterval(hitInterval); img.remove(); }
+    },50);
+
+    scoreText.innerText = `Score: ${score}`;
+  });
+
+  spawnCount++;
+}
+
+function gameLoop(){
+  if(!playing) return;
+  spawn();
+  setTimeout(gameLoop, Math.max(200, 800 - level*100));
+}
+
+function endGame(){
+  playing = false;
+  document.getElementById('result').innerText = `최고 레벨: ${level}\n총 점수: ${score}`;
+  document.getElementById('endPopup').style.display='block';
+}
+
+function restartGame(){
+  score=0; level=1; spawnCount=0; rabbitCount=0;
+  scoreText.innerText = 'Score: 0';
+  levelTextTop.innerText = 'Level: 1';
+  document.getElementById('endPopup').style.display='none';
+  countdownStart();
+}
+
+countdownStart();
+</script>
+
+</body>
+</html>
