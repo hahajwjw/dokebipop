@@ -6,54 +6,23 @@
 <title>두더지 잡기</title>
 <style>
 body { margin:0; background:#eee; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; }
-
 #hud { width:100%; max-width:420px; display:flex; justify-content:space-between; padding:10px; font-weight:bold; }
-
 #game {
-  width:100%;
-  max-width:420px;
-  aspect-ratio:3/4;
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  grid-template-rows:repeat(4,1fr);
-  gap:5px;
+  width:100%; max-width:420px; aspect-ratio:3/4;
+  display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(4,1fr); gap:5px;
 }
-
 .hole { position:relative; background:url('hole.png') center/cover no-repeat; }
 .character { position:absolute; width:100%; height:100%; top:0; left:0; }
-
-.pop { 
-  position:absolute; 
-  width:25%; 
-  height:25%; 
-  top:50%; 
-  left:50%; 
-  transform:translate(-50%, -50%); 
-}
-
+.pop { position:absolute; width:25%; height:25%; top:50%; left:50%; transform:translate(-50%, -50%); }
 #levelText {
-  position:absolute;
-  top:40%; left:50%;
-  transform:translate(-50%, -50%);
-  font-size:40px;
-  font-weight:bold;
-  display:none;
-  text-align:center;
-  color: gray;
+  position:absolute; top:40%; left:50%; transform:translate(-50%, -50%);
+  font-size:40px; font-weight:bold; display:none; text-align:center; color: gray;
 }
-
 #endPopup {
-  position:fixed;
-  top:50%; left:50%;
-  transform:translate(-50%, -50%);
-  background:white;
-  padding:20px;
-  border-radius:10px;
-  display:none;
-  text-align:center;
+  position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+  background:white; padding:20px; border-radius:10px; display:none; text-align:center; box-shadow: 0 0 10px rgba(0,0,0,0.5);
 }
-
-button { padding:10px 20px; font-size:16px; }
+button { padding:10px 20px; font-size:16px; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -68,6 +37,7 @@ button { padding:10px 20px; font-size:16px; }
 
 <div id="endPopup">
   <div id="result"></div>
+  <br>
   <button onclick="restartGame()">다시하기</button>
 </div>
 
@@ -77,20 +47,20 @@ const levelText = document.getElementById('levelText');
 const scoreText = document.getElementById('score');
 const levelTextTop = document.getElementById('level');
 
-let score = 0;
+let score = 0;         // 현재 레벨 점수
+let totalScore = 0;    // 누적 점수
 let level = 1;
-let spawnCount = 0;
+let spawnCount = 0;    // 이번 레벨에 등장한 도깨비 수
 let rabbitCount = 0;
 let playing = false;
 
 const holes = [];
 
-for(let i=0;i<12;i++){
+for(let i=0; i<12; i++){
   const div = document.createElement('div');
   div.className='hole';
   game.appendChild(div);
   holes.push(div);
-
   div.addEventListener('click', ()=>{
     if(!playing) return;
     showPop(div, false);
@@ -100,22 +70,18 @@ for(let i=0;i<12;i++){
 function countdownStart(){
   let count = 3;
   levelText.style.display='block';
-
   function step(){
-    if(count === 3){
-      levelText.innerHTML = `Level.${level}<br>${count}`;
-    } else if(count > 0){
-      levelText.innerHTML = `${count}`;
-    } else {
+    if(count === 3) levelText.innerHTML = `Level.${level}<br>${count}`;
+    else if(count > 0) levelText.innerHTML = `${count}`;
+    else {
       levelText.style.display='none';
       playing = true;
       gameLoop();
       return;
     }
     count--;
-    setTimeout(step,1000);
+    setTimeout(step, 1000);
   }
-
   step();
 }
 
@@ -130,12 +96,19 @@ function showPop(hole, isHit){
 function spawn(){
   if(!playing) return;
 
-  if(spawnCount >= 20){
-    if(score < 100){ endGame(); return; }
-
+  // 도깨비 10회 등장 완료 시 체크
+  if(spawnCount >= 10){
+    if(score < 50){ 
+      endGame("점수 미달 (50점 미만)"); 
+      return; 
+    }
+    // 레벨 통과
+    totalScore += score; // 누적 기록
     level++;
+    score = 0;          // 점수 초기화
     spawnCount = 0;
     rabbitCount = 0;
+    scoreText.innerText = `Score: ${score}`;
     levelTextTop.innerText = `Level: ${level}`;
     playing = false;
     countdownStart();
@@ -145,9 +118,7 @@ function spawn(){
   const hole = holes[Math.floor(Math.random() * holes.length)];
   if(hole.querySelector('.character')) return;
 
-  let isRabbit = (rabbitCount < 3 && Math.random() < 0.2);
-  if(isRabbit) rabbitCount++;
-
+  let isRabbit = (Math.random() < 0.2); // 토끼 등장 확률
   const frames = isRabbit ? 5 : 6;
   let i = 1;
 
@@ -155,7 +126,6 @@ function spawn(){
   img.className='character';
   hole.appendChild(img);
 
-  // 1. 애니메이션 속도 수정: (80 - level*10) -> (400 - level*50)로 변경하여 약 5배 느리게 설정
   const interval = setInterval(()=>{
     img.src = `${isRabbit ? 'to' : 'do'}_${i}_a.png`;
     i++;
@@ -166,12 +136,20 @@ function spawn(){
     e.stopPropagation();
     if(!playing) return;
 
-    if(isRabbit){ score -= 20; }
-    else { score += 10; }
+    if(isRabbit){ 
+      score -= 50; 
+    } else { 
+      score += 10; 
+    }
 
-    if(score < 0){ endGame(); return; }
-
+    scoreText.innerText = `Score: ${score}`;
     showPop(hole, true);
+
+    // 점수가 음수면 즉시 게임오버
+    if(score < 0){ 
+      endGame("점수 부족 (음수)"); 
+      return; 
+    }
 
     let j = 1;
     const hitInterval = setInterval(()=>{
@@ -179,28 +157,27 @@ function spawn(){
       j++;
       if(j > frames){ clearInterval(hitInterval); img.remove(); }
     }, 50);
-
-    scoreText.innerText = `Score: ${score}`;
   });
 
-  spawnCount++;
+  if(!isRabbit) spawnCount++; // 도깨비 등장 횟수만 카운트
 }
 
 function gameLoop(){
   if(!playing) return;
   spawn();
-  // 2. 생성 간격 수정: (1000 - level*100) -> (2000 - level*200)로 변경하여 등장 주기를 여유있게 설정
   setTimeout(gameLoop, Math.max(500, (2000 - level * 200)));
 }
 
-function endGame(){
+function endGame(reason){
   playing = false;
-  document.getElementById('result').innerText = `최고 레벨: ${level}\n총 점수: ${score}`;
+  // 게임 종료 시 현재 레벨 점수까지 합산해서 보여줌
+  const finalScore = totalScore + (score > 0 ? score : 0);
+  document.getElementById('result').innerText = `[${reason}]\n\n최고 레벨: ${level}\n최종 누적 점수: ${finalScore}`;
   document.getElementById('endPopup').style.display='block';
 }
 
 function restartGame(){
-  score = 0; level = 1; spawnCount = 0; rabbitCount = 0;
+  score = 0; totalScore = 0; level = 1; spawnCount = 0; rabbitCount = 0;
   scoreText.innerText = 'Score: 0';
   levelTextTop.innerText = 'Level: 1';
   document.getElementById('endPopup').style.display='none';
